@@ -97,7 +97,7 @@ article.chg.t-added{border-left-color:var(--add)} article.chg.t-changed{border-l
 .wd ins{background:var(--add-bg);color:var(--add);text-decoration:none}
 .wd .eq{color:var(--muted)}
 .ov{display:grid;gap:4px;font-size:13.5px}
-.ov div{padding:4px 8px;border-radius:4px;overflow-wrap:anywhere}
+.ov > div{padding:4px 8px;border-radius:4px;overflow-wrap:anywhere}
 .ov .o{background:var(--del-bg)} .ov .n{background:var(--add-bg)}
 .ov span{font:600 11px var(--f-mono);margin-right:6px}
 .empty{background:var(--surface);border:1px dashed var(--line);border-radius:8px;padding:20px;color:var(--muted)}
@@ -125,6 +125,17 @@ details.chg.inl[open] summary .checked:last-child{display:none}
 .extra{display:grid;gap:8px}
 .curlbl{font:600 11px var(--f-body);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:-4px}
 .onlychg{display:flex;gap:8px;align-items:center;font-size:14px}
+.utext .p,.ov .p{margin:0 0 .35em}
+.utext .p:last-child,.ov .p:last-child{margin-bottom:0}
+.p.l1{padding-left:1.6em;text-indent:-1.6em}
+.p.l2{padding-left:3.2em;text-indent:-1.6em}
+.p.l3{padding-left:4.6em;text-indent:-1.4em}
+.p.l4{padding-left:6em;text-indent:-1.2em}
+.p.l1 + .p.l2,.p.l2 + .p.l3{margin-top:-.15em}
+.mk{font:600 .92em var(--f-mono);color:var(--accent);display:inline-block;min-width:1.4em}
+.p.l1 > .mk{min-width:1.6em}
+.utext b.num,.ov b.num{font-weight:600;background:var(--accent-soft);border-radius:3px;padding:0 3px}
+.unit{line-height:1.55}
 </style>
 
 <div class="wrap">
@@ -147,6 +158,29 @@ details.chg.inl[open] summary .checked:last-child{display:none}
   var D = JSON.parse(document.getElementById('data').textContent);
   var $ = function(id){return document.getElementById(id)};
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+
+  var CAP='A-ZĄĆĘŁŃÓŚŹŻ„"(';
+  var RX_UST=new RegExp('(^|[.;:”")] )(\\d+[a-z]*\\.)(?= ['+CAP+'])','g');
+  var ABBR=/(?:\b(?:art|ust|pkt|poz|nr|lit|str|zm|tj|t\.j|r|z|Dz|U|zał|ozn|p|cz|rozdz|dział|tab|kat|kl|godz|ok|m\.in|tzw|ww|im|al|ul|tys|mln|pkt\.)\.|§) $/i;
+  var NUMRX=/(\d+(?:[,.]\d+)?(?:\s?[–-]\s?\d+(?:[,.]\d+)?)?)(\s?)(m²|m2|m3|m³|mm|cm|km|m|%|dB|kW|kWh|kPa|Pa|lx|°C|kg|t|dm³|dm3|l\/s|h|min|s|EI|REI|lat|osób|osoby|kondygnacji|miejsc)(?![\wąćęłńóśźż])/g;
+  function fmt(text){
+    var s=String(text==null?'':text), M='\u0001', out=s;
+    // ustępy: "1. ", "2a. " (nie po skrótach art./ust./poz.)
+    out=out.replace(RX_UST,function(all,pre,mk,off,str){ if(ABBR.test(str.slice(Math.max(0,off-14),off+pre.length))) return all; return pre+M+'1'+mk; });
+    // punkty "1) ", litery "a) ", tirety "– "
+    var lastP=0;
+    out=out.replace(/(^|[:;,] |\.\s)((\d+)[a-z]*\))(?= )/g,function(a,pre,mk,n){ n=+n;
+      if(pre===', ' && n!==lastP+1 && n!==lastP) return a; lastP=n; return pre+M+'2'+mk});
+    out=out.replace(/(^|[:;] )([a-z]{1,2}\))(?= )/g,function(a,pre,mk){return pre+M+'3'+mk});
+    out=out.replace(/(^|[:;] )([–—-])(?= )/g,function(a,pre,mk){return pre+M+'4'+mk});
+    var parts=out.split(M); if(parts.length<2) return '<div class="p">'+num(esc(s))+'</div>';
+    return parts.map(function(pt,i){
+      if(i===0){ pt=pt.trim(); return pt?'<div class="p">'+num(esc(pt))+'</div>':''; }
+      var lv=pt.charAt(0), rest=pt.slice(1), m=rest.match(/^(\S+)\s?([\s\S]*)$/);
+      return '<div class="p l'+lv+'"><span class="mk">'+esc(m[1])+'</span> '+num(esc(m[2].trim()))+'</div>';
+    }).join('');
+  }
+  function num(h){ return h.replace(NUMRX,'<b class="num">$1$2$3</b>'); }
   $('checked').textContent = D.checked;
   var GROUPS = [["Законы (ustawy)", function(d){return d.kind==='Ustawa'}],["Распоряжения (rozporządzenia)", function(d){return d.kind==='Rozporządzenie'}],["Местные акты Гданьска", function(d){return d.kind==='Uchwała'}]];
   var nav = $('docnav');
@@ -223,7 +257,7 @@ details.chg.inl[open] summary .checked:last-child{display:none}
         var ch = (u.chg||[]).map(function(i){return C[i]});
         var badge = ch.length ? '<span class="tb '+ch[0].type+'">'+TYPES[ch[0].type]+'</span>' : '';
         return '<div class="unit'+(ch.length?' has-chg':'')+'"><span class="uref">'+esc(u.ref)+badge+'</span><div class="ubody">'+
-          ch.map(function(x){return changeCard(d, x, true)}).join('')+(ch.length?'<div class="curlbl">Brzmienie aktualne</div>':'')+'<div class="utext">'+esc(u.text)+'</div></div></div>';
+          ch.map(function(x){return changeCard(d, x, true)}).join('')+(ch.length?'<div class="curlbl">Brzmienie aktualne</div>':'')+'<div class="utext">'+fmt(u.text)+'</div></div></div>';
       };
       var extra = (s.chg_extra||[]).map(function(i){return changeCard(d, C[i], false)}).join('');
       return '<article class="sec" lang="pl"><div class="sec-h"><span class="code">'+esc(s.range)+'</span><h3>'+esc(s.title)+'</h3>'+(k?'<span class="tb changed">'+k+' zmian</span>':'')+'</div>'+
@@ -260,7 +294,7 @@ details.chg.inl[open] summary .checked:last-child{display:none}
     if (x.opis) body += '<p lang="pl">'+esc(x.opis)+'</p>';
     if (x.diff) body += wordDiff(x.diff);
     if (inline && x.type==='added' && !x.opis) body += '<p class="checked">Artykuł nie występował w '+esc(d.diff.prev)+'.</p>';
-    else if (x.old || x.new) body += '<div class="ov">'+(x.old?'<div class="o" lang="pl"><span>BYŁO</span>'+esc(x.old)+'</div>':'')+(x.new?'<div class="n" lang="pl"><span>JEST</span>'+esc(x.new)+'</div>':'')+'</div>';
+    else if (x.old || x.new) body += '<div class="ov">'+(x.old?'<div class="o" lang="pl"><span>BYŁO</span>'+fmt(x.old)+'</div>':'')+(x.new?'<div class="n" lang="pl"><span>JEST</span>'+fmt(x.new)+'</div>':'')+'</div>';
     var head = inline ? '<span class="tb '+x.type+'">'+TYPES[x.type]+'</span><span class="checked" lang="pl">'+esc(d.diff.prev)+' → '+esc(d.diff.curr)+'</span>'+(x.ref!==x.unit?'<b>'+esc(x.ref)+'</b>':'')
                       : '<b>'+esc(x.ref)+'</b><span class="tb '+x.type+'">'+TYPES[x.type]+'</span>'+(x.ratio?'<span class="checked">zgodność '+Math.round(x.ratio*100)+' %</span>':'');
     if (inline) return '<details class="chg inl t-'+x.type+'"><summary class="chg-h">'+head+'<span class="checked">— pokaż zmianę</span></summary>'+body+'</details>';
